@@ -4,6 +4,8 @@ import datetime as dt
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.automap import automap_base
+from datetime import date
+import numpy as np
 
 
 #################################################
@@ -58,12 +60,14 @@ def precipitation():
     precipitation_dict = {date: prcp for date, prcp in precipitation_data}
     return jsonify(precipitation_dict)
 
+
 @app.route("/api/v1.0/stations")
 def stations():
     """Return a list of stations."""
     stations_data = session.query(Station.station).all()
     stations_list = [station for (station,) in stations_data]
     return jsonify(stations_list)
+
 
 @app.route("/api/v1.0/tobs")
 def tobs():
@@ -81,31 +85,39 @@ def tobs():
     temperature_list_most_active = [temperature for (temperature,) in temperature_data_most_active]
     return jsonify(temperature_list_most_active)
 
-@app.route("/api/v1.0/<start>")
-def temperature_start(start):
-    """Return TMIN, TAVG, and TMAX for all dates greater than or equal to the start date."""
-    temperature_stats_start = session.query(func.min(Measurement.tobs).label('min_temperature'),
-                                            func.avg(Measurement.tobs).label('avg_temperature'),
-                                            func.max(Measurement.tobs).label('max_temperature')).\
-        filter(Measurement.date >= start).first()
-    return jsonify({
-        'Min Temperature': temperature_stats_start.min_temperature,
-        'Average Temperature': temperature_stats_start.avg_temperature,
-        'Max Temperature': temperature_stats_start.max_temperature
-    })
 
+@app.route("/api/v1.0/<start>")
 @app.route("/api/v1.0/<start>/<end>")
-def temperature_start_end(start, end):
-    """Return TMIN, TAVG, and TMAX for the specified date range."""
-    temperature_stats_start_end = session.query(func.min(Measurement.tobs).label('min_temperature'),
-                                                func.avg(Measurement.tobs).label('avg_temperature'),
-                                                func.max(Measurement.tobs).label('max_temperature')).\
-        filter(Measurement.date >= start, Measurement.date <= end).first()
-    return jsonify({
-        'Min Temperature': temperature_stats_start_end.min_temperature,
-        'Average Temperature': temperature_stats_start_end.avg_temperature,
-        'Max Temperature': temperature_stats_start_end.max_temperature
-    })
+def temperature_start_end(start=None, end=None):
+    """Return TMIN, TAVG, and TMAX for all dates greater than or equal to the start date."""
+    temperature_stats = [
+        func.min(Measurement.tobs).label('min_temperature'),
+        func.avg(Measurement.tobs).label('avg_temperature'),
+        func.max(Measurement.tobs).label('max_temperature')
+    ]
+
+    if not end:
+
+        start = dt.datetime.strptime(start, "%Y-%m-%d")
+        output = session.query(*temperature_stats).\
+        filter(Measurement.date >= start).all()
+        tempstats = list(np.ravel(output))
+        return jsonify(tempstats)
+    
+    # calculate stats with start and end:
+    start = dt.datetime.strptime(start, "%Y-%m-%d")
+    end = dt.datetime.strptime(end, "%Y-%m-%d")
+
+    output = session.query(*temperature_stats).\
+    filter(Measurement.date >= start).\
+    filter(Measurement.date <= end).all()
+
+    # Close the session after data retrieval
+    session.close()
+
+    # output to 1D array and convert to a list
+    tempstats = list(np.ravel(output))
+    return jsonify(tempstats)
 
 if __name__ == '__main__':
     app.run(debug=True)
