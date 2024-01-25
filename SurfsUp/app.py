@@ -79,10 +79,12 @@ def tobs():
     most_recent_date_most_active = session.query(func.max(Measurement.date)).\
         filter(Measurement.station == most_active_station_id).scalar()
     one_year_ago_most_active = dt.datetime.strptime(most_recent_date_most_active, '%Y-%m-%d') - dt.timedelta(days=365)
-    temperature_data_most_active = session.query(Measurement.tobs).\
+    temperature_data_most_active = session.query(Measurement.date, Measurement.tobs).\
         filter(Measurement.station == most_active_station_id,
                Measurement.date >= one_year_ago_most_active).all()
-    temperature_list_most_active = [temperature for (temperature,) in temperature_data_most_active]
+
+    temperature_list_most_active = [{"date": date, "temperature": tobs} for date, tobs in temperature_data_most_active]
+    
     return jsonify(temperature_list_most_active)
 
 
